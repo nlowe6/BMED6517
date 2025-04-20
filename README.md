@@ -5,17 +5,8 @@ A comprehensive toolkit for Gene Regulatory Network (GRN) reconstruction using v
 ## Features
 
 - Multiple GRN reconstruction methods:
-  - Correlation-based methods (Pearson, Spearman)
-  - Mutual Information
   - LASSO regression
-  - GENIE3 (Random Forest)
-  - ARACNE
-  - CLR (Context Likelihood of Relatedness)
   - TIGRESS
-  - WGCNA
-  - Deep Neural Network (DNN)
-
-- GPU acceleration support for neural network methods
 - Comprehensive evaluation metrics
 - Visualization tools for results analysis
 - Support for multiple dataset formats
@@ -71,37 +62,3 @@ grn-reconstruction/
 ├── tests/                  # Unit tests
 ├── requirements.txt        # Python dependencies
 └── README.md              # This file
-```
-
-## GPU Acceleration
-
-The toolkit supports GPU acceleration for neural network methods. To use GPU:
-
-1. Install CUDA-compatible PyTorch:
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-```
-
-2. The code will automatically use GPU if available.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Citation
-
-If you use this toolkit in your research, please cite:
-
-```bibtex
-@software{grn_reconstruction_toolkit,
-  title = {GRN Reconstruction Toolkit},
-  author = {Your Name},
-  year = {2024},
-  publisher = {GitHub},
-  url = {https://github.com/yourusername/grn-reconstruction}
-}
-``` 
