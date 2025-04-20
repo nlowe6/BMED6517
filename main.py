@@ -6,6 +6,63 @@ from data_loader import GRNDataLoader
 from grn_methods import GRNReconstructor
 from evaluation import GRNEvaluator
 from visualization import Visualizer
+from scipy import stats
+import time
+
+def compare_methods(results_dir):
+    """
+    Compare the performance of all methods against correlation.
+    
+    Args:
+        results_dir (str): Directory containing results from all datasets
+    """
+    # Initialize lists to store metrics for each method
+    method_metrics = {
+        'lasso': {'aurocs': [], 'aps': []},
+        'tigress': {'aurocs': [], 'aps': []},
+        'ensemble': {'aurocs': [], 'aps': []}
+    }
+    
+    # Process each dataset
+    datasets = ["5_mr_50_cond", "40_mr_50_cond", "100_mr_100_cond"]
+    for dataset in datasets:
+        dataset_dir = Path(results_dir) / dataset
+        if not dataset_dir.exists():
+            continue
+            
+        # Read summary results
+        summary_file = dataset_dir / 'summary_results.csv'
+        if summary_file.exists():
+            try:
+                df = pd.read_csv(summary_file)
+                
+                # Get metrics for all methods
+                for method in method_metrics.keys():
+                    method_data = df[df['method'] == method]
+                    if not method_data.empty:
+                        metrics = method_data.iloc[0]
+                        method_metrics[method]['aurocs'].append(metrics['roc_auc'])
+                        method_metrics[method]['aps'].append(metrics['avg_precision'])
+            except Exception as e:
+                print(f"Error processing {summary_file}: {str(e)}")
+                continue
+    
+    # Print comparison results
+    print("\nComparison of All Methods:")
+    print("=" * 60)
+    
+    # Print metrics for each method
+    for method in method_metrics.keys():
+        if not method_metrics[method]['aurocs']:
+            print(f"\nNo data available for {method.upper()}")
+            continue
+            
+        print(f"\n{method.upper()}:")
+        print("-" * 40)
+        print(f"Mean ROC AUC: {np.mean(method_metrics[method]['aurocs']):.4f}")
+        print(f"Mean Average Precision: {np.mean(method_metrics[method]['aps']):.4f}")
+        
+    print("\n" + "=" * 60)
 
 def run_analysis(dataset_path, output_dir):
     """
@@ -35,6 +92,8 @@ def run_analysis(dataset_path, output_dir):
         print("Loading ground truth matrix...")
         ground_truth_matrix = loader.get_ground_truth_matrix()
         print(f"Ground truth matrix shape: {ground_truth_matrix.shape}")
+        print(f"Ground truth matrix type: {ground_truth_matrix.dtype}")
+        print(f"Ground truth unique values: {np.unique(ground_truth_matrix)}")
         
         # Split into TF and target expressions
         print("Splitting into TF and target expressions...")
@@ -42,6 +101,8 @@ def run_analysis(dataset_path, output_dir):
             expression_matrix, gene_ids)
         print(f"TF expression shape: {tf_expression.shape}")
         print(f"Target expression shape: {target_expression.shape}")
+        print(f"Number of TFs: {len(tf_ids)}")
+        print(f"Number of targets: {len(target_ids)}")
         
         # Initialize evaluator
         print("Initializing evaluator...")
@@ -49,15 +110,9 @@ def run_analysis(dataset_path, output_dir):
         
         # Run different methods
         methods = [
-            'correlation', 
-            'mutual_info', 
             'lasso', 
-            'genie3', 
-            'aracne', 
-            'clr', 
             'tigress', 
-            'wgcna',
-            'dnn'
+            'ensemble'
         ]
         results = {}
         
@@ -70,6 +125,10 @@ def run_analysis(dataset_path, output_dir):
             # Get predictions
             predicted_matrix = reconstructor.fit(tf_expression, target_expression)
             print(f"Predicted matrix shape: {predicted_matrix.shape}")
+            print(f"Predicted matrix type: {predicted_matrix.dtype}")
+            print(f"Predicted matrix min: {predicted_matrix.min()}")
+            print(f"Predicted matrix max: {predicted_matrix.max()}")
+            print(f"Predicted matrix mean: {predicted_matrix.mean()}")
             
             # Evaluate predictions
             metrics = evaluator.evaluate(predicted_matrix)
@@ -117,6 +176,49 @@ def run_analysis(dataset_path, output_dir):
         print(f"Error processing dataset {dataset_path}: {str(e)}")
         raise
 
+def main():
+    try:
+        # Load the data
+        data = np.load('5_mr_50_cond.npz')
+        
+        # Check data format
+        print("Available arrays in the file:", list(data.keys()))
+        
+        # Get expression data
+        tf_expression = data['tf_expression']
+        target_expression = data['target_expression']
+        
+        # Ensure data is in correct format (2D arrays)
+        if len(tf_expression.shape) != 2 or len(target_expression.shape) != 2:
+            raise ValueError("Expression data must be 2D arrays")
+            
+        # Print data shapes and types
+        print(f"\nTF expression shape: {tf_expression.shape}")
+        print(f"Target expression shape: {target_expression.shape}")
+        print(f"TF expression type: {tf_expression.dtype}")
+        print(f"Target expression type: {target_expression.dtype}")
+        
+        # Initialize reconstructor with TIGRESS method
+        reconstructor = GRNReconstructor()
+        
+        # Run TIGRESS method with timing
+        print("\nRunning TIGRESS method...")
+        start_time = time.time()
+        regulatory_matrix = reconstructor._tigress_method(tf_expression, target_expression)
+        end_time = time.time()
+        
+        # Print results
+        print("\nResults:")
+        print(f"Time taken: {end_time - start_time:.2f} seconds")
+        print(f"Regulatory matrix shape: {regulatory_matrix.shape}")
+        print(f"Min value: {regulatory_matrix.min():.4f}")
+        print(f"Max value: {regulatory_matrix.max():.4f}")
+        print(f"Mean value: {regulatory_matrix.mean():.4f}")
+        
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise
+
 if __name__ == "__main__":
     # Example usage
     datasets = [
@@ -134,4 +236,7 @@ if __name__ == "__main__":
             )
         except Exception as e:
             print(f"Failed to process dataset {dataset}: {str(e)}")
-            continue 
+            continue
+    
+    # Compare methods after processing all datasets
+    compare_methods("results") 

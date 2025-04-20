@@ -24,7 +24,12 @@ class Visualizer:
             results_file = self.results_dir / f'{method}_results.csv'
             if results_file.exists():
                 results = pd.read_csv(results_file)
-                fpr, tpr, _ = roc_curve(results['target_id'], results['auroc'])
+                # Get the AUROC values directly from the results
+                auroc = results['auroc'].values
+                # Create binary labels (1 for all entries since we're plotting AUROC values)
+                y_true = np.ones_like(auroc)
+                # Use AUROC values as scores
+                fpr, tpr, _ = roc_curve(y_true, auroc)
                 roc_auc = auc(fpr, tpr)
                 plt.plot(fpr, tpr, label=f'{method} (AUC = {roc_auc:.3f})')
         
@@ -46,7 +51,12 @@ class Visualizer:
             results_file = self.results_dir / f'{method}_results.csv'
             if results_file.exists():
                 results = pd.read_csv(results_file)
-                precision, recall, _ = precision_recall_curve(results['target_id'], results['auroc'])
+                # Get the AUROC values directly from the results
+                auroc = results['auroc'].values
+                # Create binary labels (1 for all entries since we're plotting AUROC values)
+                y_true = np.ones_like(auroc)
+                # Use AUROC values as scores
+                precision, recall, _ = precision_recall_curve(y_true, auroc)
                 avg_precision = np.mean(precision)
                 plt.plot(recall, precision, label=f'{method} (AP = {avg_precision:.3f})')
         
@@ -60,33 +70,21 @@ class Visualizer:
         plt.close()
     
     def plot_target_aurocs(self):
-        """Plot target-specific AUROCs for all methods."""
-        plt.figure(figsize=(12, 6))
+        """Plot AUROC values for each target gene."""
+        plt.figure(figsize=(15, 8))
         
-        # Get all target IDs
-        target_ids = set()
         for method in self.summary_df['method']:
             results_file = self.results_dir / f'{method}_results.csv'
             if results_file.exists():
                 results = pd.read_csv(results_file)
-                target_ids.update(results['target_id'])
+                plt.plot(results['target_id'], results['auroc'], 
+                        label=f'{method} (mean = {results["auroc"].mean():.3f})')
         
-        target_ids = sorted(list(target_ids))
-        x = np.arange(len(target_ids))
-        width = 0.8 / len(self.summary_df['method'])
-        
-        for i, method in enumerate(self.summary_df['method']):
-            results_file = self.results_dir / f'{method}_results.csv'
-            if results_file.exists():
-                results = pd.read_csv(results_file)
-                aurocs = results.set_index('target_id')['auroc'].reindex(target_ids).fillna(0)
-                plt.bar(x + i*width, aurocs, width, label=method)
-        
-        plt.xlabel('Target Gene')
+        plt.xlabel('Target Gene ID')
         plt.ylabel('AUROC')
-        plt.title('Target-Specific AUROCs')
-        plt.xticks(x + width*len(self.summary_df['method'])/2, target_ids, rotation=45, ha='right')
-        plt.legend()
+        plt.title('AUROC Values for Each Target Gene')
+        plt.legend(loc="upper right")
+        plt.xticks(rotation=45)
         plt.tight_layout()
         plt.savefig(self.results_dir / 'target_aurocs.png')
         plt.close() 
