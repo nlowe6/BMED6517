@@ -1,12 +1,10 @@
 # GRN Reconstruction Toolkit
 
-A comprehensive toolkit for Gene Regulatory Network (GRN) reconstruction using various methods, including traditional statistical approaches and deep learning techniques.
+A comprehensive toolkit for Gene Regulatory Network (GRN) reconstruction
 
 ## Features
 
-- Multiple GRN reconstruction methods:
-  - LASSO regression
-  - TIGRESS
+- Ensembles TIGRESS and ElasticNet:
 - Comprehensive evaluation metrics
 - Visualization tools for results analysis
 - Support for multiple dataset formats
@@ -36,9 +34,6 @@ from evaluation import GRNEvaluator
 loader = GRNDataLoader("path/to/dataset")
 expression_matrix, gene_ids = loader.load_expression_matrix()
 tf_expression, target_expression, tf_ids, target_ids = loader.get_tf_target_split(expression_matrix, gene_ids)
-
-# Initialize reconstructor
-reconstructor = GRNReconstructor(method='dnn')  # Choose from: correlation, mutual_info, lasso, genie3, aracne, clr, tigress, wgcna, dnn
 
 # Reconstruct network
 predicted_matrix = reconstructor.fit(tf_expression, target_expression)

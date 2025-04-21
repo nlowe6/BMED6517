@@ -25,15 +25,10 @@ class GRNDataLoader:
         print(f"\nLoading expression matrix from: {expr_file}")
         
         df = pd.read_csv(expr_file, sep='\t', header=0)
-        print(f"Raw expression matrix shape: {df.shape}")
         
         # Convert to numpy array and get gene IDs
         expression_matrix = df.values.T  # Transpose to get (n_genes, n_conditions)
         gene_ids = [str(i) for i in range(len(expression_matrix))]
-        
-        print(f"Processed expression matrix shape: {expression_matrix.shape}")
-        print(f"Number of genes: {len(gene_ids)}")
-        print(f"Sample gene IDs: {gene_ids[:5]}")
         
         return expression_matrix, gene_ids
     
@@ -69,18 +64,9 @@ class GRNDataLoader:
             tf_col = 'tf_id'
             target_col = 'target_id'
         
-        print(f"Ground truth data shape: {df.shape}")
-        print(f"Sample ground truth entries:")
-        print(df.head())
-        
         # Get unique TF and target IDs
         tf_ids = sorted(df[tf_col].unique())
         target_ids = sorted(df[target_col].unique())
-        
-        print(f"Number of unique TFs: {len(tf_ids)}")
-        print(f"Number of unique targets: {len(target_ids)}")
-        print(f"Sample TF IDs: {tf_ids[:5]}")
-        print(f"Sample target IDs: {target_ids[:5]}")
         
         return tf_ids, target_ids
     
@@ -99,8 +85,6 @@ class GRNDataLoader:
         tf_ids = sorted([int(tf) for tf in tf_ids])
         target_ids = sorted([int(tgt) for tgt in target_ids])
         
-        print(f"Number of TFs in matrix: {len(tf_ids)}")
-        print(f"Number of targets in matrix: {len(target_ids)}")
         
         # Create binary matrix with correct dimensions
         ground_truth = np.zeros((len(tf_ids), len(target_ids)), dtype=int)
@@ -131,11 +115,6 @@ class GRNDataLoader:
             except (ValueError, KeyError) as e:
                 print(f"Warning: Skipping invalid entry: {row[tf_col]}, {row[target_col]}")
                 continue
-        
-        print(f"Number of regulatory relationships: {n_relationships}")
-        print(f"Ground truth matrix shape: {ground_truth.shape}")
-        print(f"Number of positive entries: {np.sum(ground_truth)}")
-        print(f"Number of negative entries: {np.sum(1 - ground_truth)}")
         
         return ground_truth
     
@@ -189,10 +168,5 @@ class GRNDataLoader:
         # Get corresponding gene IDs
         tf_gene_ids = [gene_ids[i] for i in tf_indices]
         target_gene_ids = [gene_ids[i] for i in target_indices]
-        
-        print(f"Number of TFs: {len(tf_indices)}")
-        print(f"Number of targets: {len(target_indices)}")
-        print(f"TF expression shape: {tf_expression.shape}")
-        print(f"Target expression shape: {target_expression.shape}")
         
         return tf_expression, target_expression, tf_gene_ids, target_gene_ids 

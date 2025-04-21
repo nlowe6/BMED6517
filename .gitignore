@@ -35,11 +35,6 @@ ENV/
 .ipynb_checkpoints
 
 # Project specific
-results/
-*.log
-*.csv
-*.png
-*.pdf
 
 # OS specific
 .DS_Store

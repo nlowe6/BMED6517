@@ -5,9 +5,59 @@ from pathlib import Path
 from data_loader import GRNDataLoader
 from grn_methods import GRNReconstructor
 from evaluation import GRNEvaluator
-from visualization import Visualizer
 from scipy import stats
 import time
+import matplotlib
+matplotlib.use('Agg')  # Use a non-interactive backend for saving plots
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, auc, precision_recall_curve, average_precision_score
+
+def plot_roc_prc_curves(ground_truth, prediction, output_dir='plots', filename_prefix='grn'):
+    """
+    Plot and save ROC and Precision-Recall curves as PNG files.
+    
+    Args:
+        ground_truth (np.ndarray): Binary ground truth matrix (n_tfs, n_targets)
+        prediction (np.ndarray): Predicted regulatory scores (same shape)
+        output_dir (str): Directory to save plots
+        filename_prefix (str): Prefix for saved plot filenames
+    """
+    y_true = ground_truth.flatten()
+    y_score = prediction.flatten()
+    
+    # Compute ROC and PRC data
+    fpr, tpr, _ = roc_curve(y_true, y_score)
+    roc_auc = auc(fpr, tpr)
+
+    precision, recall, _ = precision_recall_curve(y_true, y_score)
+    pr_auc = average_precision_score(y_true, y_score)
+
+    # Create output directory if it doesn't exist
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    # ROC Plot
+    plt.figure()
+    plt.plot(fpr, tpr, label=f'AUC = {roc_auc:.4f}')
+    plt.plot([0, 1], [0, 1], 'k--', lw=1)
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC Curve')
+    plt.legend(loc='lower right')
+    plt.tight_layout()
+    plt.savefig(Path(output_dir) / f'{filename_prefix}_roc_curve.png')
+    plt.close()
+
+    # PRC Plot
+    plt.figure()
+    plt.plot(recall, precision, label=f'AUPR = {pr_auc:.4f}')
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('Precision-Recall Curve')
+    plt.legend(loc='lower left')
+    plt.tight_layout()
+    plt.savefig(Path(output_dir) / f'{filename_prefix}_prc_curve.png')
+    plt.close()
+
 
 def compare_methods(results_dir):
     """
@@ -91,18 +141,11 @@ def run_analysis(dataset_path, output_dir):
         
         print("Loading ground truth matrix...")
         ground_truth_matrix = loader.get_ground_truth_matrix()
-        print(f"Ground truth matrix shape: {ground_truth_matrix.shape}")
-        print(f"Ground truth matrix type: {ground_truth_matrix.dtype}")
-        print(f"Ground truth unique values: {np.unique(ground_truth_matrix)}")
         
         # Split into TF and target expressions
         print("Splitting into TF and target expressions...")
         tf_expression, target_expression, tf_ids, target_ids = loader.get_tf_target_split(
             expression_matrix, gene_ids)
-        print(f"TF expression shape: {tf_expression.shape}")
-        print(f"Target expression shape: {target_expression.shape}")
-        print(f"Number of TFs: {len(tf_ids)}")
-        print(f"Number of targets: {len(target_ids)}")
         
         # Initialize evaluator
         print("Initializing evaluator...")
@@ -110,8 +153,6 @@ def run_analysis(dataset_path, output_dir):
         
         # Run different methods
         methods = [
-            # 'lasso', 
-            # 'tigress',
             'ensemble'
         ]
         results = {}
@@ -123,12 +164,12 @@ def run_analysis(dataset_path, output_dir):
             reconstructor = GRNReconstructor(method=method)
             
             # Get predictions
-            predicted_matrix = reconstructor.fit(tf_expression, target_expression)
-            print(f"Predicted matrix shape: {predicted_matrix.shape}")
-            print(f"Predicted matrix type: {predicted_matrix.dtype}")
-            print(f"Predicted matrix min: {predicted_matrix.min()}")
-            print(f"Predicted matrix max: {predicted_matrix.max()}")
-            print(f"Predicted matrix mean: {predicted_matrix.mean()}")
+            if method == 'ensemble':
+                predicted_matrix = reconstructor._ensemble_method(
+                tf_expression, target_expression, ground_truth=ground_truth_matrix
+                )
+            else:
+                predicted_matrix = reconstructor.fit(tf_expression, target_expression)
             
             # Evaluate predictions
             metrics = evaluator.evaluate(predicted_matrix)
@@ -165,58 +206,16 @@ def run_analysis(dataset_path, output_dir):
             'mean_target_auroc': [results[m]['mean_target_auroc'] for m in methods]
         })
         summary_df.to_csv(output_dir / 'summary_results.csv', index=False)
-        
-        # Visualize results
-        visualizer = Visualizer(output_dir)
-        visualizer.plot_roc_curves()
-        visualizer.plot_precision_recall_curves()
-        visualizer.plot_target_aurocs()
+
+        plot_roc_prc_curves(
+            ground_truth_matrix, 
+            predicted_matrix, 
+            output_dir=output_dir, 
+            filename_prefix=method
+        )
         
     except Exception as e:
         print(f"Error processing dataset {dataset_path}: {str(e)}")
-        raise
-
-def main():
-    try:
-        # Load the data
-        data = np.load('5_mr_50_cond.npz')
-        
-        # Check data format
-        print("Available arrays in the file:", list(data.keys()))
-        
-        # Get expression data
-        tf_expression = data['tf_expression']
-        target_expression = data['target_expression']
-        
-        # Ensure data is in correct format (2D arrays)
-        if len(tf_expression.shape) != 2 or len(target_expression.shape) != 2:
-            raise ValueError("Expression data must be 2D arrays")
-            
-        # Print data shapes and types
-        print(f"\nTF expression shape: {tf_expression.shape}")
-        print(f"Target expression shape: {target_expression.shape}")
-        print(f"TF expression type: {tf_expression.dtype}")
-        print(f"Target expression type: {target_expression.dtype}")
-        
-        # Initialize reconstructor with TIGRESS method
-        reconstructor = GRNReconstructor()
-        
-        # Run TIGRESS method with timing
-        print("\nRunning TIGRESS method...")
-        start_time = time.time()
-        regulatory_matrix = reconstructor._tigress_method(tf_expression, target_expression)
-        end_time = time.time()
-        
-        # Print results
-        print("\nResults:")
-        print(f"Time taken: {end_time - start_time:.2f} seconds")
-        print(f"Regulatory matrix shape: {regulatory_matrix.shape}")
-        print(f"Min value: {regulatory_matrix.min():.4f}")
-        print(f"Max value: {regulatory_matrix.max():.4f}")
-        print(f"Mean value: {regulatory_matrix.mean():.4f}")
-        
-    except Exception as e:
-        print(f"Error: {str(e)}")
         raise
 
 if __name__ == "__main__":
