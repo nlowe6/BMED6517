@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader, TensorDataset
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, SAGEConv
 from torch_geometric.data import Data, Batch
+from sklearn.linear_model import ElasticNet
 
 class GRNReconstructor:
     def __init__(self, method='correlation'):
@@ -44,6 +45,8 @@ class GRNReconstructor:
             return self._tigress_method(tf_expression, target_expression)
         elif self.method == 'ensemble':
             return self._ensemble_method(tf_expression, target_expression)
+        elif self.method == 'elasticnet':
+            return self._elasticnet_method(tf_expression, target_expression)
         else:
             raise ValueError(f"Unknown method: {self.method}")
     
@@ -97,12 +100,14 @@ class GRNReconstructor:
             try:
                 # Fit Lasso regression with increased iterations and adjusted parameters
                 lasso = LassoCV(
-                    cv=5,
-                    max_iter=5000,  # Increased from default
-                    tol=1e-4,      # Tighter tolerance
-                    n_alphas=100,  # More alpha values to try
-                    n_jobs=1       # Disable parallel processing
+                    cv=10,              # More folds for better generalization
+                    max_iter=10000,     # Allow convergence for harder problems
+                    tol=1e-5,           # Higher precision
+                    n_alphas=200,       # More fine-grained alpha grid
+                    alphas=np.logspace(-4, 0.5, 200),  # Custom alpha range,
+                    n_jobs=-1           # Use all available cores
                 )
+
                 lasso.fit(tf_scaled, target_expression[j, :])
                 
                 # Store coefficients
@@ -150,10 +155,9 @@ class GRNReconstructor:
                     
                     # Fit LARS with adjusted parameters for better numerical stability
                     lars = LassoLarsCV(
-                        cv=3,
-                        max_iter=1000,
-                        n_jobs=1,
-                        eps=1e-6  # Increased from default 2.22e-16
+                        cv=5,
+                        max_iter=2000,
+                        n_jobs=-1,
                     )
                     lars.fit(X_boot, y_boot)
                     
@@ -171,7 +175,40 @@ class GRNReconstructor:
                 regulatory_matrix[:, j] = 0
         
         return regulatory_matrix
+
+    def _elasticnet_method(self, tf_expression, target_expression):
+        """
+        Reconstruct GRN using ElasticNet regression.
     
+        Args:
+            tf_expression (numpy.ndarray): TF expression matrix of shape (n_tfs, n_conditions)
+            target_expression (numpy.ndarray): Target gene expression matrix of shape (n_targets, n_conditions)
+        
+        Returns:
+            numpy.ndarray: Regulatory strength matrix of shape (n_tfs, n_targets)
+        """
+        n_tfs = tf_expression.shape[0]
+        n_targets = target_expression.shape[0]
+        regulatory_matrix = np.zeros((n_tfs, n_targets))
+    
+        # Scale the data
+        scaler = StandardScaler()
+        tf_scaled = scaler.fit_transform(tf_expression.T)  # shape: (n_conditions, n_tfs)
+    
+        for j in range(n_targets):
+            try:
+                enet = ElasticNet(
+                    l1_ratio=[0.1, 0.5, 0.7, 0.9, 0.95, 1.0],  # mix of Ridge and Lasso
+                    max_iter=10000,
+            )
+                enet.fit(tf_scaled, target_expression[j, :])
+                regulatory_matrix[:, j] = np.abs(enet.coef_)
+            except Exception as e:
+                print(f"ElasticNet error on target {j}: {str(e)}")
+                regulatory_matrix[:, j] = 0
+    
+        return regulatory_matrix
+
 
     def _ensemble_method(self, tf_expression, target_expression):
         """
@@ -186,13 +223,13 @@ class GRNReconstructor:
         """
         # Get predictions from both methods
         tigress_matrix = self._tigress_method(tf_expression, target_expression)
-        lasso_matrix = self._lasso_method(tf_expression, target_expression)
+        elastic_matrix = self._elasticnet_method(tf_expression, target_expression)
         
         # Normalize both matrices to [0, 1] range
         tigress_matrix = (tigress_matrix - tigress_matrix.min()) / (tigress_matrix.max() - tigress_matrix.min())
-        lasso_matrix = (lasso_matrix - lasso_matrix.min()) / (lasso_matrix.max() - lasso_matrix.min())
+        elastic_matrix = (elastic_matrix - elastic_matrix.min()) / (elastic_matrix.max() - elastic_matrix.min())
         
         # Combine predictions with equal weights
-        ensemble_matrix = 0.5 * tigress_matrix + 0.5 * lasso_matrix
+        ensemble_matrix = 0.5 * tigress_matrix + 0.5 * elastic_matrix
         
         return ensemble_matrix 

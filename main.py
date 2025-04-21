@@ -110,8 +110,8 @@ def run_analysis(dataset_path, output_dir):
         
         # Run different methods
         methods = [
-            'lasso', 
-            'tigress', 
+            # 'lasso', 
+            # 'tigress',
             'ensemble'
         ]
         results = {}
